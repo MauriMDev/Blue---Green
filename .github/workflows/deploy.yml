@@ -19,15 +19,21 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # 3 Deploy Blue
+      # 3 Agregar VPS a known_hosts
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      # 4 Deploy Blue
       - name: Deploy Blue container
         run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/deploy_blue.sh"
 
-      # 4 Cambiar tráfico a Blue
+      # 5 Cambiar tráfico a Blue
       - name: Switch Nginx to Blue
         run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/switch.sh blue"
 
-      # 5 (Opcional) Deploy Green
+      # 6 (Opcional) Deploy Green
       - name: Deploy Green container
         if: github.ref == 'refs/heads/main'
         run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/deploy_green.sh"
