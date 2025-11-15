@@ -1,15 +1,15 @@
-# Build
-FROM node:18 AS build
+# Etapa de build
+FROM node:20 AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
 
-# Serve
-FROM node:18-slim
+# Etapa de producción
+FROM node:20
 WORKDIR /app
+COPY --from=build /app/build /app/build
 RUN npm install -g serve
-COPY --from=build /app/build ./build
 EXPOSE 3000
 CMD ["serve", "-s", "build", "-l", "3000"]
