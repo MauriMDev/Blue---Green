@@ -1,15 +1,25 @@
-# Etapa de build
-FROM node:20 AS build
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
 RUN npm run build
 
-# Etapa de producción
-FROM node:20
+# Stage 2: Runtime
+FROM node:18-alpine
+
 WORKDIR /app
-COPY --from=build /app/build /app/build
+
+# Instalar servidor HTTP simple para servir la app
 RUN npm install -g serve
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
 EXPOSE 3000
-CMD ["serve", "-s", "build", "-l", "3000"]
+
+CMD ["serve", "-s", "dist", "-l", "3000"]

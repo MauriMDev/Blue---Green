@@ -1,15 +1,38 @@
 #!/bin/bash
-# Uso: ./switch.sh blue|green
-if [ "$1" == "blue" ]; then
-    sudo ln -sf /etc/nginx/upstreams/blue.conf /etc/nginx/upstreams/current.conf
-    echo "Switching a BLUE"
-elif [ "$1" == "green" ]; then
-    sudo ln -sf /etc/nginx/upstreams/green.conf /etc/nginx/upstreams/current.conf
-    echo "Switching a GREEN"
+
+set -e
+
+ENVIRONMENT=$1
+NGINX_CONF="/etc/nginx/sites-available/app.conf"
+PORT=""
+
+if [ "$ENVIRONMENT" == "blue" ]; then
+    PORT=3000
+elif [ "$ENVIRONMENT" == "green" ]; then
+    PORT=3001
 else
-    echo "Uso: ./switch.sh blue|green"
+    echo "Uso: ./switch.sh [blue|green]"
     exit 1
 fi
 
-sudo systemctl reload nginx
-echo "Nginx recargado"
+echo "Cambiando tráfico a $ENVIRONMENT (puerto $PORT)..."
+
+# Respaldar configuración actual
+sudo cp $NGINX_CONF $NGINX_CONF.bak
+
+# Cambiar el upstream
+sudo sed -i "s/server 127.0.0.1:[0-9]*;/server 127.0.0.1:$PORT;/" $NGINX_CONF
+
+# Validar configuración
+if ! sudo nginx -t; then
+    echo "✗ Error en configuración Nginx, revirtiendo..."
+    sudo cp $NGINX_CONF.bak $NGINX_CONF
+    exit 1
+fi
+
+# Recargar Nginx sin downtime
+sudo nginx -s reload
+
+echo "✓ Tráfico cambiado a $ENVIRONMENT"
+echo "Configuración actual:"
+grep "server 127.0.0.1" $NGINX_CONF | head -1

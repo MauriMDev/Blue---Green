@@ -1,39 +1,62 @@
-name: Deploy Blue-Green React App
+name: Blue-Green Deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      # 1 Clonar el repo
-      - name: Checkout repository
+      - name: Checkout código
         uses: actions/checkout@v3
-
-      # 2 Configurar SSH
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.1
+      
+      - name: Conectar a VPS
+        uses: appleboy/ssh-action@master
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      # 3 Agregar VPS a known_hosts
-      - name: Add VPS to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-
-      # 4 Deploy Blue
-      - name: Deploy Blue container
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/deploy_blue.sh"
-
-      # 5 Cambiar tráfico a Blue
-      - name: Switch Nginx to Blue
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/switch.sh blue"
-
-      # 6 (Opcional) Deploy Green
-      - name: Deploy Green container
-        if: github.ref == 'refs/heads/main'
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash ~/scripts/deploy_green.sh"
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.APP_PATH }}
+            
+            # Determinar qué entorno está activo
+            ACTIVE=$(grep "server 127.0.0.1" /etc/nginx/sites-available/app.conf | grep -o "300[01]")
+            
+            if [ "$ACTIVE" = "3000" ]; then
+              DEPLOY_ENV="green"
+              DEPLOY_PORT="3001"
+            else
+              DEPLOY_ENV="blue"
+              DEPLOY_PORT="3000"
+            fi
+            
+            echo "Entorno activo: $ACTIVE"
+            echo "Desplegando en: $DEPLOY_ENV (puerto $DEPLOY_PORT)"
+            
+            # Actualizar código
+            git pull origin main
+            
+            # Desplegar en el entorno inactivo
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh $DEPLOY_ENV
+            
+            # Esperar a que el contenedor esté listo
+            sleep 5
+            
+            # Health check
+            if curl -s http://127.0.0.1:$DEPLOY_PORT/health | grep -q "healthy"; then
+              echo "✓ Health check exitoso"
+              
+              # Switch de tráfico
+              chmod +x scripts/switch.sh
+              ./scripts/switch.sh $DEPLOY_ENV
+              
+              echo "✓ Despliegue completado"
+            else
+              echo "✗ Health check fallido, revirtiendo"
+              chmod +x scripts/rollback.sh
+              ./scripts/rollback.sh
+              exit 1
+            fi
