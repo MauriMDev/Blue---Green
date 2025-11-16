@@ -1,3 +1,5 @@
+export const API_BASE_URL = 'https://vps-master.duckdns.org';
+
 /**
  * Rutas de la aplicación landing
  */
