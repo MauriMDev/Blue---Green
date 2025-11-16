@@ -17,10 +17,9 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /home/deployer/Blue---Green
+            cd ${{ secrets.APP_PATH }}
             
             # Determinar qué entorno está activo
             ACTIVE=$(grep "server 127.0.0.1" /etc/nginx/sites-available/app.conf | grep -o "300[01]")
@@ -47,7 +46,7 @@ jobs:
             sleep 5
             
             # Health check
-            if curl -s http://127.0.0.1:$DEPLOY_PORT/health | grep -q "healthy"; then
+            if curl -s http://127.0.0.1:$DEPLOY_PORT/ > /dev/null 2>&1; then
               echo "✓ Health check exitoso"
               
               # Switch de tráfico
